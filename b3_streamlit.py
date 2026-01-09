@@ -29,3 +29,6 @@ st.bar_chart(tickerDF.Dividends)
 # http://localhost:8501/
 # Local URL: http://localhost:8501
 # Network URL: http://192.168.1.13:8501
+
+
+# http://127.0.0.1:63251  # fornecido pelo github
