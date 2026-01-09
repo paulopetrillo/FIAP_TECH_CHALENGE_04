@@ -9,9 +9,9 @@ st.set_page_config(
 st.header("**PAINEL DE PREÇO E DIVIDENDOS DE AÇÕES DA B3**")
 
 ticker= st.text_input('Digite o ticker da ação', 'BBAS3')
-empresa = yf.Ticker(f"{ticker}.SA")\
+empresa = yf.Ticker(f"{ticker}.SA")
 
-tickerDF = empresa.history(start = "2014-01-01",
+tickerDF = empresa.history(start = "2014-01-01",  
                            end = "2025-10-30")
 
 col1, col2, col3 = st.columns([1,1,1])
