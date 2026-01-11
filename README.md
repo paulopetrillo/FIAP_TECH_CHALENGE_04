@@ -26,22 +26,20 @@ tendências. Seja criativo(a) e coloque algumas análises temporais
 para comunicar a previsão do seu modelo. 
 Visualização e Monitoramento: 
 
-● Adicione um painel que mostre as principais métricas de validação do 
-modelo e que contenha a análise de performance do modelo. 
+● Adicione um painel que mostre as principais métricas de validação do modelo e que contenha a análise de performance do modelo. 
 
-● Salve as entradas dos novos dados em um arquivo .csv ou .json para 
-simular um "log de uso" da aplicação. (Opcional) 
+● Salve as entradas dos novos dados em um arquivo .csv ou .json para simular um "log de uso" da aplicação. (Opcional) 
 
 Sobre a entrega: 
-Entregar a atividade na plataforma online da FIAP com os seguintes 
-itens: 
-✓ Link do repositório contendo o modelo e os arquivos de deploy no 
-Streamlit 
+Entregar a atividade na plataforma online da FIAP com os seguintes itens: 
+
+✓ Link do repositório contendo o modelo e os arquivos de deploy no Streamlit 
+
 ✓ Link do app deployado no Streamlit. 
-✓ Vídeo de até 5 (cinco) minutos mostrando a solução do deploy e o 
-dashboard de monitoramento das métricas do modelo. 
-Não se esqueçam de que este é um entregável obrigatório! Atentem-se 
-ao prazo de entrega, que vai até o final da fase. Caso tenham alguma dúvida 
-durante o desenvolvimento do projeto, não deixem de chamar nossos 
-professores! 
+
+✓ Vídeo de até 5 (cinco) minutos mostrando a solução do deploy e o dashboard de monitoramento das métricas do modelo. 
+
+Não se esqueçam de que este é um entregável obrigatório! Atentem-se ao prazo de entrega, que vai até o final da fase. 
+
+Caso tenham alguma dúvida durante o desenvolvimento do projeto, não deixem de chamar nossos professores! 
 Boa sorte!  
