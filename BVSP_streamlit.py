@@ -111,3 +111,26 @@ with st.expander("📌 Instruções de Uso"):
     - Os preços estão em Reais (R$)
     - O período padrão é de 10 anos
     """)
+
+
+# # parametros do modelo
+# import pickle
+
+# # Salva o modelo
+# with open('param_name_model.pkl', 'wb') as f:
+#     pickle.dump(name_model, f)
+
+# # Carrega o modelo
+# with open('param_name_model.pkl', 'rb') as f:
+#     name_model_loaded = pickle.load(f)
+
+# # 
+# new_data = [[,,,]] # substitua pelos novos dados para previsão
+# prediction = name_model_loaded.predict(new_data)
+
+# if prediction == 0:
+#     resultado = "Fechamento negativo"
+# else:
+#     resultado = "Fechamento positivo"
+
+# print(resultado)
