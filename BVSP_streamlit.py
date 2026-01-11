@@ -4,18 +4,18 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 st.set_page_config(
-    page_title="PAINEL DA B3",
+    page_title="PAINEL DA BVSP",
     layout='wide'
 )
 
-st.header("**PAINEL DE PREÇO E DIVIDENDOS DE AÇÕES DA B3**")
+st.header("**PAINEL DE PREÇO E DIVIDENDOS DE AÇÕES DA BVSP**")
 
 # Definir data de fim como ontem para evitar dados futuros
 end_date = datetime.now() - timedelta(days=1)
 start_date = end_date - timedelta(days=365 * 10)  # 10 anos de dados
 
 # "^BVSP" parâmetro para pegar a cotação da BVSP (Ibovespa (IBOV))
-ticker = st.text_input('Digite o ticker da ação', "BVSP")
+ticker = st.text_input('Digite o ticker da ação', "^BVSP")
 ticker_symbol = f"{ticker}.SA" if ticker != "^BVSP" else "^BVSP"
 
 try:
