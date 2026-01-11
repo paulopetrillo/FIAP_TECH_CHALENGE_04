@@ -112,6 +112,9 @@ with st.expander("📌 Instruções de Uso"):
     - O período padrão é de 10 anos
     """)
 
+dados = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_CHALENGE_04/refs/heads/main/dados_tratados.csv')
+
+st.write(dados.head())
 
 # # parametros do modelo
 # import pickle
