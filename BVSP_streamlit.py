@@ -3,6 +3,9 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import pickle
+# modelos
+from sklearn.svm import SVC                                        # SVM
+
 
 st.set_page_config(
     page_title="PAINEL DA BVSP",
@@ -182,6 +185,7 @@ input_close = st.number_input("Preço de Fechamento", format="%.3f")
 with open('svm_clf.pkl', 'rb') as f:
     svm_clf_loaded = pickle.load(f)
 
+y_pred_svm = svm_clf_loaded.predict(X_test_svm)
 
 
 # # parametros do modelo
