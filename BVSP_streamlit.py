@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
+import pickle
 
 st.set_page_config(
     page_title="PAINEL DA BVSP",
@@ -13,6 +14,26 @@ st.header("**PAINEL DE PREÇO E DIVIDENDOS DE AÇÕES DA BVSP**")
 # Definir data de fim como ontem para evitar dados futuros
 end_date = datetime.now() - timedelta(days=1)
 start_date = end_date - timedelta(days=365 * 10)  # 10 anos de dados
+
+
+
+# Adicionar instruções de uso
+with st.expander("📌 Instruções de Uso"):
+    st.write("""
+    **Tickers disponíveis:**
+    - **Ibovespa:** Digite `^BVSP`
+    - **Ações brasileiras:** Digite o código sem `.SA` (ex: `PETR4`, `VALE3`, `ITUB4`)
+    - **ETFs:** Digite o código normalmente (ex: `BOVA11`)
+    
+    **Notas:**
+    - Os dados são fornecidos pelo Yahoo Finance
+    - Os preços estão em Reais (R$)
+    - O período padrão é de 10 anos
+    """)
+
+
+
+
 
 # "^BVSP" parâmetro para pegar a cotação da BVSP (Ibovespa (IBOV))
 ticker = st.text_input('Digite o ticker da ação', "^BVSP")
@@ -98,23 +119,70 @@ except Exception as e:
     st.error(f"Erro ao buscar dados: {str(e)}")
     st.info("Verifique se o ticker está correto. Para o Ibovespa use '^BVSP'. Para ações brasileiras use o código sem '.SA' (ex: PETR4, VALE3).")
 
-# Adicionar instruções de uso
-with st.expander("📌 Instruções de Uso"):
-    st.write("""
-    **Tickers disponíveis:**
-    - **Ibovespa:** Digite `^BVSP`
-    - **Ações brasileiras:** Digite o código sem `.SA` (ex: `PETR4`, `VALE3`, `ITUB4`)
-    - **ETFs:** Digite o código normalmente (ex: `BOVA11`)
-    
-    **Notas:**
-    - Os dados são fornecidos pelo Yahoo Finance
-    - Os preços estão em Reais (R$)
-    - O período padrão é de 10 anos
-    """)
 
 dados = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_CHALENGE_04/refs/heads/main/dados_tratados.csv')
 
-st.write(dados.head())
+# st.info("HEADER DO DATASET")
+# st.write(dados.head())
+
+# st.info("Resumo do Dataset")
+# st.write(dados.describe())
+
+# st.info("Informações do Dataset")
+# st.write(dados.info())
+
+# # Criar o DataFrame
+# data_table = {
+#     'index': list(range(38)),
+#     'feature': [
+#         'Retorno', 'Ret_3d', 'Lag3', 'RSI14', 'Dist_MM20_pct', 'Cross_STOCH',
+#         'DOW_cos', 'Cross_50_100', 'MM5', 'MM20', 'MACDsig', 'Ret_2d', 'MM50',
+#         'MACD', 'Ret_5d', 'ATR14', 'Cross_20_50', 'Cross_5_20', 'Dist_MM100_pct',
+#         'Cross_EMA12_26', 'EMA26', 'EMA12', 'Slope_MM100', 'Slope_MM20', 'MM100',
+#         'Volume', 'Dist_MM50_pct', 'STOCHD', 'Slope_MM50', 'Ret_20d', 'Ret_10d',
+#         'ZClose_20', 'STOCHK', 'Lag2', 'Volatilidade5', 'ZVolume_20', 'DOW_sin',
+#         'Lag1'
+#     ],
+#     'importancia_media': [
+#         0.100000, 0.018333, 0.015000, 0.005000, 0.005000, 0.003333,
+#         0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+#         0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+#         0.000000, 0.000000, 0.000000, -0.001667, -0.001667, -0.005000,
+#         -0.005000, -0.005000, -0.006667, -0.008333, -0.010000, -0.011667,
+#         -0.015000, -0.015000, -0.018333, -0.026667, -0.043333, -0.061667
+#     ],
+#     'importancia_std': [
+#         0.050553, 0.022298, 0.026822, 0.030322, 0.028431, 0.027689,
+#         0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.027889, 0.000000,
+#         0.000000, 0.014907, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
+#         0.000000, 0.000000, 0.000000, 0.007265, 0.007265, 0.011902,
+#         0.015899, 0.028431, 0.024944, 0.014434, 0.026034, 0.028431,
+#         0.024664, 0.019650, 0.016583, 0.022608, 0.028087, 0.026405
+#     ]
+# }
+
+# df_table = pd.DataFrame(data_table)
+
+# # Título da tabela
+# st.header("Importância das Variáveis por Permutação")
+
+# # Exibir a tabela no Streamlit
+# st.dataframe(df_table, hide_index=True, use_container_width=True)
+
+st.write('### Insira novos valores para previsão de fechamento da ação:')
+input_data = st.date_input("Data da Previsão")
+input_open = st.number_input("Preço de Abertura", format="%.3f")
+input_high = st.number_input("Preço Máximo", format="%.3f")
+input_low = st.number_input("Preço Mínimo", format="%.3f")
+input_close = st.number_input("Preço de Fechamento", format="%.3f")
+
+# calcular outros parâmetros necessários para o modelo
+
+# Carrega o modelo
+with open('svm_clf.pkl', 'rb') as f:
+    svm_clf_loaded = pickle.load(f)
+
+
 
 # # parametros do modelo
 # import pickle
