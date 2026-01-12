@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pickle
 # modelos
-from sklearn.svm import SVC                                        # SVM
+from sklearn.svm import SVC   
 
 
 st.set_page_config(
@@ -125,8 +125,9 @@ except Exception as e:
 
 dados = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_CHALENGE_04/refs/heads/main/dados_tratados.csv')
 
-# st.info("HEADER DO DATASET")
-# st.write(dados.head())
+df = dados.copy()
+st.info("HEADER DO DATASET")
+st.write(dados.head())
 
 # st.info("Resumo do Dataset")
 # st.write(dados.describe())
@@ -172,12 +173,13 @@ dados = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_C
 # # Exibir a tabela no Streamlit
 # st.dataframe(df_table, hide_index=True, use_container_width=True)
 
-st.write('### Insira novos valores para previsão de fechamento da ação:')
-input_data = st.date_input("Data da Previsão")
-input_open = st.number_input("Preço de Abertura", format="%.3f")
-input_high = st.number_input("Preço Máximo", format="%.3f")
-input_low = st.number_input("Preço Mínimo", format="%.3f")
-input_close = st.number_input("Preço de Fechamento", format="%.3f")
+# st.write('### Insira novos valores para previsão de fechamento da ação:')
+# input_data = st.date_input("Data da Previsão")
+# input_open = st.number_input("Preço de Abertura", format="%.3f")
+# input_high = st.number_input("Preço Máximo", format="%.3f")
+# input_low = st.number_input("Preço Mínimo", format="%.3f")
+# input_close = st.number_input("Preço de Fechamento", format="%.3f")
+input_dias = st.number_input("Número de Dias para Previsão", min_value=1, max_value=60, value=30)
 
 # calcular outros parâmetros necessários para o modelo
 
@@ -185,7 +187,39 @@ input_close = st.number_input("Preço de Fechamento", format="%.3f")
 with open('svm_clf.pkl', 'rb') as f:
     svm_clf_loaded = pickle.load(f)
 
-y_pred_svm = svm_clf_loaded.predict(X_test_svm)
+
+# segurança: remove linhas quebradas
+#df_ml = df.dropna(subset=FEATURES + ["Target"]).copy()
+FEATURES = [ 'Retorno', 'Ret_3d', 'Lag3', 'RSI14', 'Dist_MM20_pct', 
+        'DOW_cos',  'MM5', 'MM20', 'MACDsig', 'Ret_2d', 'MM50',
+        'MACD', 'Ret_5d', 'ATR14', 'Dist_MM100_pct',
+        'EMA26', 'EMA12', 'Slope_MM100', 'Slope_MM20', 'MM100',
+        'Volume', 'Dist_MM50_pct', 'STOCHD', 'Slope_MM50', 'Ret_20d', 'Ret_10d',
+        'ZClose_20', 'STOCHK', 'Lag2', 'Volatilidade5', 'ZVolume_20', 'DOW_sin',
+        'Lag1']
+
+# define X / y
+X = df[FEATURES].copy()
+y = df["Target"].astype(int).copy()
+
+# separa últimos 30 dias para TESTE
+n_test = input_dias
+X_train, X_test = X.iloc[:-n_test], X.iloc[-n_test:]
+y_train, y_test = y.iloc[:-n_test], y.iloc[-n_test:]
+
+# print("Treino:", X_train.index.min().date(), "->", X_train.index.max().date())
+# print("Teste :", X_test.index.min().date(),  "->", X_test.index.max().date())
+# print("Shapes:", X_train.shape, X_test.shape)
+
+y_pred_svm = svm_clf_loaded.predict(X_test)
+
+#st.write(f"### Previsão de Fechamento para {input_data + timedelta(days=input_dias)}:")
+
+if y_pred_svm[-1] == 0:
+    st.write("Fechamento Negativo") 
+else:
+    st.write("Fechamento Positivo") 
+
 
 
 # # parametros do modelo
