@@ -126,8 +126,35 @@ except Exception as e:
 dados = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_CHALENGE_04/refs/heads/main/dados_tratados.csv')
 
 df = dados.copy()
+df = df.dropna().copy()
+
 st.info("HEADER DO DATASET")
-st.write(dados.head())
+st.write(df.head())
+
+FEATURES = [
+    # já existentes
+    "Retorno","Lag1","Lag2","Lag3",
+    "MM5","MM20","MM50","MM100","Volatilidade5","Volume",
+    "EMA12","EMA26","MACD","MACDsig","RSI14","STOCHK","STOCHD","ATR14",
+    "Ret_2d","Ret_3d","Ret_5d","Ret_10d","Ret_20d",
+    "ZClose_20","ZVolume_20",
+
+    # distâncias do preço às MMs
+    "Dist_MM20_pct","Dist_MM50_pct","Dist_MM100_pct",
+
+    # slopes
+    "Slope_MM20","Slope_MM50","Slope_MM100",
+
+    # cruzamentos
+    "Cross_5_20","Cross_20_50","Cross_50_100","Cross_EMA12_26","Cross_STOCH",
+
+    # dia da semana (versão cíclica)
+    "DOW_sin","DOW_cos"
+]
+
+df = df.dropna().copy()
+
+st.write("Período final após novas features:", df.index.min().date(), "->", df.index.max().date(), "| linhas:", len(df))
 
 # st.info("Resumo do Dataset")
 # st.write(dados.describe())
@@ -181,31 +208,21 @@ st.write(dados.head())
 # input_close = st.number_input("Preço de Fechamento", format="%.3f")
 input_dias = st.number_input("Número de Dias para Previsão", min_value=1, max_value=60, value=30)
 
-# calcular outros parâmetros necessários para o modelo
-
-# Carrega o modelo
-with open('svm_clf.pkl', 'rb') as f:
-    svm_clf_loaded = pickle.load(f)
-
-
-# segurança: remove linhas quebradas
-#df_ml = df.dropna(subset=FEATURES + ["Target"]).copy()
-FEATURES = [ 'Retorno', 'Ret_3d', 'Lag3', 'RSI14', 'Dist_MM20_pct', 
-        'DOW_cos',  'MM5', 'MM20', 'MACDsig', 'Ret_2d', 'MM50',
-        'MACD', 'Ret_5d', 'ATR14', 'Dist_MM100_pct',
-        'EMA26', 'EMA12', 'Slope_MM100', 'Slope_MM20', 'MM100',
-        'Volume', 'Dist_MM50_pct', 'STOCHD', 'Slope_MM50', 'Ret_20d', 'Ret_10d',
-        'ZClose_20', 'STOCHK', 'Lag2', 'Volatilidade5', 'ZVolume_20', 'DOW_sin',
-        'Lag1']
 
 # define X / y
 X = df[FEATURES].copy()
 y = df["Target"].astype(int).copy()
 
-# separa últimos 30 dias para TESTE
+# separa últimos n_test dias para TESTE
 n_test = input_dias
 X_train, X_test = X.iloc[:-n_test], X.iloc[-n_test:]
 y_train, y_test = y.iloc[:-n_test], y.iloc[-n_test:]
+
+st.write("Treino:", X_train.index.min().date(), "->", X_train.index.max().date())
+st.write("Teste :", X_test.index.min().date(),  "->", X_test.index.max().date())
+st.write("Shapes:", X_train.shape, X_test.shape)
+
+
 
 # print("Treino:", X_train.index.min().date(), "->", X_train.index.max().date())
 # print("Teste :", X_test.index.min().date(),  "->", X_test.index.max().date())
