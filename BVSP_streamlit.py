@@ -7,6 +7,8 @@ import pickle
 # modelos
 from sklearn.svm import SVC   
 
+from datetime import date
+
 
 st.set_page_config(
     page_title="PAINEL DA BVSP",
@@ -153,16 +155,17 @@ feature_cols = [
     "DOW_sin","DOW_cos"
 ]
 
-df = df.dropna().copy()
+df_38_features = df[feature_cols].copy()
+df_38_features = df_38_features.dropna().copy()
+st.info("DATASET COM 38 FEATURES")
+st.write(df_38_features.head())
 
-FEATURES = [c for c in feature_cols if c in df.columns]
-
-# segurança: remove linhas quebradas
-df_ml = df.dropna(subset=FEATURES + ["Target"]).copy()
+# # segurança: remove linhas quebradas
+# df_ml = df.dropna(subset=FEATURES + ["Target"]).copy()
 
 # define X / y
-X = df_ml[FEATURES].copy()
-y = df_ml["Target"].astype(int).copy()
+X = df_38_features.copy()
+y = df["Target"].astype(int).copy()
 
 n_test = st.number_input("Número de Dias para Previsão", min_value=1, max_value=60, value=30)
 
@@ -211,8 +214,17 @@ resultado_rf["Previsao_RF"] = y_pred_rf
 resultado_rf["Acertou"] = (resultado_rf["Target_real"] == resultado_rf["Previsao_RF"]).astype(int)
 
 st.write(resultado_rf.head(15))  # mostra os 15 primeiros
+t_1=[[-0.0796797263681647,-1.9969716881410136,-0.5643672174612924,1.4369554985640187,104.093,102.18675,96.97518,86.91625,1.2265044439895267,10900000,103.14725011259122,101.33530451543,1.8119455971612268,1.952086539617413,57.75068102212942,48.16017316016453,67.04462503854658,1.8918571428571431,-2.075060232932413,-2.6277164906964634,-1.5764235190520504,-1.5283550073736496,3.9348272132771367,0.2785754881872977,0.976829878934459,0.6294847423956806,6.037441745403305,18.30929199085325,0.1908481147069096,0.427849287359705,0.1222899319652581,1,1,1,1,0,0,1]]
+#teste = rf.predict('2026-01-14 00:00:00')
+teste = rf.predict(t_1)
+st.write(teste)
+if teste == 0:
+    st.write("Fechamento Negativo") 
+else:
+    st.write("Fechamento Positivo") 
 
-################################################################
+
+#################################################################
 # y_pred_svm = svm_clf_loaded.predict(X_test)
 
 # #st.write(f"### Previsão de Fechamento para {input_data + timedelta(days=input_dias)}:")
