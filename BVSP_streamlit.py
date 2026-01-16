@@ -4,9 +4,9 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import pickle
+
 # modelos
 from sklearn.svm import SVC   
-
 from datetime import date
 
 
@@ -126,9 +126,8 @@ except Exception as e:
     st.info("Verifique se o ticker está correto. Para o Ibovespa use '^BVSP'. Para ações brasileiras use o código sem '.SA' (ex: PETR4, VALE3).")
 
 
-dados = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_CHALENGE_04/refs/heads/main/dados_tratados_data_correta.csv', index_col=0, parse_dates=True)
+df = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_CHALENGE_04/refs/heads/main/dados_tratados_data_correta.csv', index_col=0, parse_dates=True)
 
-df = dados.copy()
 df = df.dropna().copy()
 
 st.info("HEADER DO DATASET")
@@ -181,48 +180,55 @@ st.write("Treino:", X_train.index.min().date(), "->", X_train.index.max().date()
 st.write("Teste :", X_test.index.min().date(),  "->", X_test.index.max().date())
 st.write("Shapes:", X_train.shape, X_test.shape)
 
-# Baseline com Random Forest (dispensa normalização)
-rf = RandomForestClassifier(
-    n_estimators=500,         # 500 árvores
-    max_depth=8,              # profundidade máxima = 8
-    min_samples_leaf=5,       # evita folhas muito pequenas
-    max_features="sqrt",
-    class_weight="balanced",  # balanceamento de classes
-    random_state=42
-)
+# Carregar o arquivo pickle
+with open('svm_clf.pkl', 'rb') as arquivo:
+    modelo_svm_clf = pickle.load(arquivo)
 
-# Treina o modelo
-rf.fit(X_train, y_train)
+# Criar inputs para os dados
+st.header("Insira os dados para previsão")
 
-# (função utilitária p/ alinhar colunas pela ordem vista no fit)
-def align_to_fit(model, Xdf):
-    cols_fit = getattr(model, "feature_names_in_", None)
-    return Xdf.reindex(columns=cols_fit) if cols_fit is not None else Xdf
+# Exemplo para um modelo com 3 features
+teste_input=[[-0.0796797263681647,-1.9969716881410136,-0.5643672174612924,
+      1.4369554985640187,104.093,102.18675,96.97518,86.91625,
+      1.2265044439895267,10900000,103.14725011259122,101.33530451543,
+      1.8119455971612268,1.952086539617413,57.75068102212942,
+      48.16017316016453,67.04462503854658,1.8918571428571431,
+      -2.075060232932413,-2.6277164906964634,-1.5764235190520504,
+      -1.5283550073736496,3.9348272132771367,0.2785754881872977,
+      0.976829878934459,0.6294847423956806,6.037441745403305,
+      18.30929199085325,0.1908481147069096,0.427849287359705,
+      0.1222899319652581,1,1,1,1,0,0,1]]
 
-X_test_rf = align_to_fit(rf, X_test)
-y_pred_rf = rf.predict(X_test_rf)
-st.write(f"### Previsão Random Forest de Fechamento para {X_test.index[-1] + timedelta(days=1)}:")
-if y_pred_rf[-1] == 0:
+st.write("Input de teste:")
+st.write(teste_input)
+
+# Depois calcular os 38 valores.
+# feature1 = st.number_input("Feature 1", value=0.0)
+# feature2 = st.number_input("Feature 2", value=0.0)
+# feature3 = st.number_input("Feature 3", value=0.0)
+# ...
+# input_data = [[feature1, feature2, feature3]]
+
+# # Botão para fazer previsão
+# if st.button("Prever"):
+#     # Criar array com os dados de entrada
+#     dados_entrada = np.array([[feature1, feature2, feature3]])
+    
+#     # Fazer previsão
+#     previsao = modelo.predict(dados_entrada)
+    
+#     # Mostrar resultado
+#     st.success(f"Previsão: {previsao[0]}")
+
+y_pred = modelo_svm_clf.predict(teste_input)
+
+st.write(f"### Previsão SVM de Fechamento para o próximo dia:")
+if y_pred == 0:
     st.write("Fechamento Negativo")
 else:
     st.write("Fechamento Positivo") 
 
-# Tabela de conferência: dia, abertura, fechamento, target real e previsão
-resultado_rf = df.iloc[-len(y_test):][["Abertura","Fechamento"]].copy()
-resultado_rf["Target_real"] = y_test.values
-resultado_rf["Previsao_RF"] = y_pred_rf
-resultado_rf["Acertou"] = (resultado_rf["Target_real"] == resultado_rf["Previsao_RF"]).astype(int)
-
-st.write(resultado_rf.head(15))  # mostra os 15 primeiros
-t_1=[[-0.0796797263681647,-1.9969716881410136,-0.5643672174612924,1.4369554985640187,104.093,102.18675,96.97518,86.91625,1.2265044439895267,10900000,103.14725011259122,101.33530451543,1.8119455971612268,1.952086539617413,57.75068102212942,48.16017316016453,67.04462503854658,1.8918571428571431,-2.075060232932413,-2.6277164906964634,-1.5764235190520504,-1.5283550073736496,3.9348272132771367,0.2785754881872977,0.976829878934459,0.6294847423956806,6.037441745403305,18.30929199085325,0.1908481147069096,0.427849287359705,0.1222899319652581,1,1,1,1,0,0,1]]
-#teste = rf.predict('2026-01-14 00:00:00')
-teste = rf.predict(t_1)
-st.write(teste)
-if teste == 0:
-    st.write("Fechamento Negativo") 
-else:
-    st.write("Fechamento Positivo") 
-
+st.write(y_pred)
 
 #################################################################
 # y_pred_svm = svm_clf_loaded.predict(X_test)
