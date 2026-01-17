@@ -37,10 +37,6 @@ with st.expander("📌 Instruções de Uso"):
     - O período padrão é de 10 anos
     """)
 
-
-
-
-
 # "^BVSP" parâmetro para pegar a cotação da BVSP (Ibovespa (IBOV))
 ticker = st.text_input('Digite o ticker da ação', "^BVSP")
 ticker_symbol = f"{ticker}.SA" if ticker != "^BVSP" else "^BVSP"
