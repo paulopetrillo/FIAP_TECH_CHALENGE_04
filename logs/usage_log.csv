@@ -1,0 +1,3 @@
+timestamp,ticker_input,ticker_symbol,years_yahoo_chart,n_test_dataset,last_pred,score01,dataset_source
+2026-01-17T16:49:24,^BVSP,^BVSP,10,30,1,0.7656963973537128,local
+2026-01-17T17:25:06,VALE3,VALE3.SA,10,30,1,0.7656963973537128,local

@@ -5,11 +5,16 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pickle
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn import metrics
 
 # modelos
-from sklearn.svm import SVC   
 from datetime import date
-
+from sklearn.svm import SVC   
+from sklearn.preprocessing import StandardScaler
+import warnings
+warnings.filterwarnings('ignore')
 
 st.set_page_config(
     page_title="PAINEL DA BVSP",
@@ -21,8 +26,6 @@ st.header("**PAINEL DE PREÇO E DIVIDENDOS DE AÇÕES DA BVSP**")
 # Definir data de fim como ontem para evitar dados futuros
 end_date = datetime.now() - timedelta(days=1)
 start_date = end_date - timedelta(days=365 * 10)  # 10 anos de dados
-
-
 
 # Adicionar instruções de uso
 with st.expander("📌 Instruções de Uso"):
@@ -86,20 +89,19 @@ try:
         with col_stats2:
             if not tickerDF.empty and 'Volume' in tickerDF.columns:
                 volume_medio = tickerDF['Volume'].mean()
-                st.metric("Volume Médio Diário", f"{volume_medio:.0f}")
+                st.metric("Volume Médio Diário", f"{volume_medio:,.0f}")
         
         with col_stats3:
             if not tickerDF.empty and 'Close' in tickerDF.columns:
                 preco_max = tickerDF['Close'].max()
-                st.metric("Pontos Máximo", f"{preco_max:.0f}")
+                st.metric("Pontos Máximo", f"{preco_max:,.0f}")
                 
 except Exception as e:
     st.error(f"Erro ao buscar dados: {str(e)}")
     st.info("Verifique se o ticker está correto. Para o Ibovespa use '^BVSP'. Para ações brasileiras use o código sem '.SA' (ex: PETR4, VALE3).")
 
-
+# Carregar dados
 df = pd.read_csv('https://raw.githubusercontent.com/paulopetrillo/FIAP_TECH_CHALENGE_04/refs/heads/main/dados_tratados_data_correta.csv', index_col=0, parse_dates=True)
-
 df = df.dropna().copy()
 
 st.info("HEADER DO DATASET")
@@ -107,257 +109,388 @@ st.write(df.head())
 
 # Data de previsão
 st.info("Informe a data do dia de previsão (no formato YYYY-MM-DD):")
-input_date = st.text_input("Data de Previsão", value="2020-07-29") 
+input_date_str = st.text_input("Data de Previsão", value="2020-07-29") 
+
 try:
-    input_date = pd.to_datetime(input_date)
+    input_date = pd.to_datetime(input_date_str)
     st.success(f"Data de previsão definida para: {input_date.date()}")
+    
+    # Verificar se a data existe no DataFrame
+    # if input_date.date() not in df.index.normalize():
+    #     st.error(f"A data {input_date.date()} não foi encontrada no dataset.")
+    #     st.stop()
+        
+    input_date = '2020-07-29'
+    # Obter valores para a data específica
+    input_fechamento = df.loc[df.index.normalize() == input_date, 'Fechamento'].iloc[0]
+    input_abertura = df.loc[df.index.normalize() == input_date, 'Abertura'].iloc[0]
+    input_maxima = df.loc[df.index.normalize() == input_date, 'Maxima'].iloc[0]
+    input_minima = df.loc[df.index.normalize() == input_date, 'Minima'].iloc[0]
+    input_volume = df.loc[df.index.normalize() == input_date, 'Volume'].iloc[0]
+    
+    st.subheader("Entrada de Dados para Previsão")
+    colins1, colins2, colins3, colins4, colins5 = st.columns(5)
+    
+    with colins1:
+        st.info("Valor de Fechamento:")
+        st.success(f"Fechamento: {input_fechamento:,.2f}")
+    
+    with colins2:
+        st.info("Valor de Abertura:")
+        st.success(f"Abertura: {input_abertura:,.2f}")
+    
+    with colins3:
+        st.info("Valor de Máxima:")
+        st.success(f"Máxima: {input_maxima:,.2f}")
+    
+    with colins4:
+        st.info("Valor de Mínima:")
+        st.success(f"Mínima: {input_minima:,.2f}")
+    
+    with colins5:
+        st.info("Valor de Volume:")
+        st.success(f"Volume: {input_volume:,.0f}")
+        
 except Exception as e:
-    st.error("Formato de data inválido. Use YYYY-MM-DD.")
+    st.error(f"Erro ao processar data: {str(e)}")
     st.stop()
 
-st.subheader("Entrada de Dados para Previsão")
-colins1, colins2, colins3, colins4, colins5 = st.columns(5)
-with colins1:
-    # inserir valor de Fechamento do dia anterior à data de previsão
-    st.info("Valor de Fechamento:")
-    input_fechamento = df.loc[df.index.normalize() == input_date, 'Fechamento'].iloc[0]
-    st.success(f"Fechamento: {input_fechamento}")
-with colins2:
-    # inserir valor de Abertura do dia anterior à data de previsão
-    st.info("Valor de Abertura:")
-    input_abertura = df.loc[df.index.normalize() == input_date, 'Abertura'].iloc[0]
-    st.success(f"Abertura: {input_abertura}")
-with colins3:
-    #inserir valor de Máxima do dia anterior à data de previsão
-    st.info("Valor de Máxima:")
-    input_maxima = df.loc[df.index.normalize() == input_date, 'Maxima'].iloc[0]
-    st.success(f"Máxima: {input_maxima}")
-with colins4:
-    #inserir valor de Mínima do dia anterior à data de previsão
-    st.info("Valor de Mínima:")
-    input_minima = df.loc[df.index.normalize() == input_date, 'Minima'].iloc[0]
-    st.success(f"Mínima: {input_minima}")
-with colins5:
-    #inserir valor de Volume do dia anterior à data de previsão
-    st.info("Valor de Volume:")
-    input_volume = df.loc[df.index.normalize() == input_date, 'Volume'].iloc[0]
-    st.success(f"Volume: {input_volume}")
+###################################################################
+######################## Previsão Futura ##########################
 
+class SVMPredictor:
+    """
+    Classe para fazer previsões usando modelo SVM pré-treinado.
+    """
+    
+    def __init__(self, model_path='svm_clf.pkl'):
+        try:
+            with open(model_path, 'rb') as file:
+                self.model = pickle.load(file)
+            st.success(f"Modelo carregado com sucesso de {model_path}")
+        except FileNotFoundError:
+            st.error(f"Arquivo {model_path} não encontrado!")
+            raise
+        except Exception as e:
+            st.error(f"Erro ao carregar o modelo: {str(e)}")
+            raise
+        
+        self.scaler = StandardScaler()
+        self.feature_names = [
+            "Retorno", "Lag1", "Lag2", "Lag3",
+            "MM5", "MM20", "MM50", "MM100", "Volatilidade5", "Volume",
+            "EMA12", "EMA26", "MACD", "MACDsig", "RSI14", "STOCHK", "STOCHD", "ATR14",
+            "Ret_2d", "Ret_3d", "Ret_5d", "Ret_10d", "Ret_20d",
+            "ZClose_20", "ZVolume_20",
+            "Dist_MM20_pct", "Dist_MM50_pct", "Dist_MM100_pct",
+            "Slope_MM20", "Slope_MM50", "Slope_MM100",
+            "Cross_5_20", "Cross_20_50", "Cross_50_100", "Cross_EMA12_26", "Cross_STOCH",
+            "DOW_sin", "DOW_cos"
+        ]
+    
+    def calculate_all_features(self, df):
+        """
+        Calcula todas as features necessárias para o modelo.
+        """
+        df = df.copy()
+        
+        # 1. Retorno diário
+        df["Retorno"] = df["Fechamento"].pct_change() * 100
+        
+        # 2. Lags
+        df["Lag1"] = df["Retorno"].shift(1)
+        df["Lag2"] = df["Retorno"].shift(2)
+        df["Lag3"] = df["Retorno"].shift(3)
+        
+        # 3. Médias Móveis
+        df["MM5"] = df["Fechamento"].rolling(window=5).mean()
+        df["MM20"] = df["Fechamento"].rolling(window=20).mean()
+        df["MM50"] = df["Fechamento"].rolling(window=50).mean()
+        df["MM100"] = df["Fechamento"].rolling(window=100).mean()
+        
+        # 4. Volatilidade
+        df["Volatilidade5"] = df["Retorno"].rolling(window=5).std()
+        
+        # 5. Volume já existe
+        
+        # 6. EMA e MACD
+        df["EMA12"] = df["Fechamento"].ewm(span=12, adjust=False).mean()
+        df["EMA26"] = df["Fechamento"].ewm(span=26, adjust=False).mean()
+        df["MACD"] = df["EMA12"] - df["EMA26"]
+        df["MACDsig"] = df["MACD"].ewm(span=9, adjust=False).mean()
+        
+        # 7. RSI
+        def compute_rsi(series, window=14):
+            delta = series.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            return rsi
+        
+        df["RSI14"] = compute_rsi(df["Fechamento"], window=14)
+        
+        # 8. Stochastic
+        low_14 = df["Minima"].rolling(window=14).min()
+        high_14 = df["Maxima"].rolling(window=14).max()
+        df["STOCHK"] = 100 * (df["Fechamento"] - low_14) / (high_14 - low_14 + 1e-10)
+        df["STOCHD"] = df["STOCHK"].rolling(window=3).mean()
+        
+        # 9. ATR
+        high_low = df["Maxima"] - df["Minima"]
+        high_close = (df["Maxima"] - df["Fechamento"].shift()).abs()
+        low_close = (df["Minima"] - df["Fechamento"].shift()).abs()
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        df["ATR14"] = tr.rolling(window=14).mean()
+        
+        # 10. Retornos em janelas diferentes
+        for window in [2, 3, 5, 10, 20]:
+            df[f"Ret_{window}d"] = df["Fechamento"].pct_change(window) * 100
+        
+        # 11. Z-Scores
+        df["ZClose_20"] = (df["Fechamento"] - df["Fechamento"].rolling(20).mean()) / (df["Fechamento"].rolling(20).std() + 1e-10)
+        df["ZVolume_20"] = (df["Volume"] - df["Volume"].rolling(20).mean()) / (df["Volume"].rolling(20).std() + 1e-10)
+        
+        # 12. Distâncias às MMs
+        df["Dist_MM20_pct"] = (df["Fechamento"] / df["MM20"] - 1) * 100
+        df["Dist_MM50_pct"] = (df["Fechamento"] / df["MM50"] - 1) * 100
+        df["Dist_MM100_pct"] = (df["Fechamento"] / df["MM100"] - 1) * 100
+        
+        # 13. Slope das MMs
+        df["Slope_MM20"] = df["MM20"].pct_change() * 100
+        df["Slope_MM50"] = df["MM50"].pct_change() * 100
+        df["Slope_MM100"] = df["MM100"].pct_change() * 100
+        
+        # 14. Cruzamentos
+        df["Cross_5_20"] = (df["MM5"] > df["MM20"]).astype(int)
+        df["Cross_20_50"] = (df["MM20"] > df["MM50"]).astype(int)
+        df["Cross_50_100"] = (df["MM50"] > df["MM100"]).astype(int)
+        df["Cross_EMA12_26"] = (df["EMA12"] > df["EMA26"]).astype(int)
+        df["Cross_STOCH"] = (df["STOCHK"] > df["STOCHD"]).astype(int)
+        
+        # 15. Dia da semana
+        df["DOW"] = df.index.dayofweek
+        df["DOW_sin"] = np.sin(2 * np.pi * df["DOW"] / 7)
+        df["DOW_cos"] = np.cos(2 * np.pi * df["DOW"] / 7)
+        
+        return df
+    
+    def predict_for_date(self, full_df, target_date):
+        """
+        Faz previsão para uma data específica usando dados históricos.
+        """
+        # Encontra o índice da data alvo
+        target_idx = full_df.index.get_loc(target_date)
+        
+        # Precisamos de dados suficientes para calcular todas as features
+        min_required = max(100, target_idx)  # Pelo menos 100 dias para MMs
+        
+        if target_idx < 100:
+            st.warning(f"Para prever para {target_date}, precisamos de pelo menos 100 dias de dados históricos.")
+            return None
+        
+        # Pega dados até a data alvo (inclusive)
+        data_until_target = full_df.iloc[:target_idx + 1].copy()
+        
+        # Calcula features
+        data_with_features = self.calculate_all_features(data_until_target)
+        
+        # Pega a última linha (data alvo)
+        last_row = data_with_features.iloc[[-1]]
+        
+        # Seleciona apenas as features necessárias
+        features = last_row[self.feature_names]
+        
+        # Faz a previsão
+        prediction = self.model.predict(features)
+        
+        # Tenta obter probabilidades
+        probabilities = None
+        if hasattr(self.model, 'predict_proba'):
+            probabilities = self.model.predict_proba(features)
+        
+        return {
+            'prediction': prediction[0],
+            'probabilities': probabilities[0] if probabilities is not None else None,
+            'features': last_row.iloc[0].to_dict()
+        }
 
-feature_cols = [
-    # já existentes
-    "Retorno","Lag1","Lag2","Lag3",
-    "MM5","MM20","MM50","MM100","Volatilidade5","Volume",
-    "EMA12","EMA26","MACD","MACDsig","RSI14","STOCHK","STOCHD","ATR14",
-    "Ret_2d","Ret_3d","Ret_5d","Ret_10d","Ret_20d",
-    "ZClose_20","ZVolume_20",
+# Instanciar o predictor
+try:
+    predictor = SVMPredictor('svm_clf.pkl')
+    
+    # Fazer previsão para a data especificada
+    st.subheader("Previsão para a Data Específica")
+    
+    result = predictor.predict_for_date(df, input_date)
+    
+    if result:
+        prediction = result['prediction']
+        probabilities = result['probabilities']
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if prediction == 0:
+                st.error("📉 **Previsão: Fechamento Negativo**")
+            else:
+                st.success("📈 **Previsão: Fechamento Positivo**")
+        
+        with col2:
+            if probabilities is not None:
+                st.metric("Probabilidade de Subir", f"{probabilities[1]:.2%}")
+        
+        with col3:
+            if probabilities is not None:
+                st.metric("Probabilidade de Cair", f"{probabilities[0]:.2%}")
+        
+        # Mostrar algumas features importantes
+        st.subheader("Algumas Features Calculadas")
+        features_to_show = ['RSI14', 'MACD', 'STOCHK', 'Volatilidade5', 'Retorno']
+        features_df = pd.DataFrame({
+            'Feature': features_to_show,
+            'Valor': [result['features'].get(f, 'N/A') for f in features_to_show]
+        })
+        st.table(features_df)
+        
+except Exception as e:
+    st.error(f"Erro ao fazer previsão: {str(e)}")
 
-    # distâncias do preço às MMs
-    "Dist_MM20_pct","Dist_MM50_pct","Dist_MM100_pct",
+####################### Avaliação do Modelo #######################
+st.divider()
+st.subheader("📊 Avaliação do Modelo SVM")
 
-    # slopes
-    "Slope_MM20","Slope_MM50","Slope_MM100",
+# Calcular features para todo o dataset
+df_with_features = predictor.calculate_all_features(df)
 
-    # cruzamentos
-    "Cross_5_20","Cross_20_50","Cross_50_100","Cross_EMA12_26","Cross_STOCH",
-
-    # dia da semana (versão cíclica)
-    "DOW_sin","DOW_cos"
-]
-
-
-df_38_features = df[feature_cols].copy()
-# remover novos NaNs criados por indicadores
+# Selecionar features
+feature_cols = predictor.feature_names
+df_38_features = df_with_features[feature_cols].copy()
 df_38_features = df_38_features.dropna().copy()
 
-# comentaar 2 linhas abaixo
-st.info("DATASET COM 38 FEATURES")
-st.write(df_38_features.head())
+# Garantir que temos target correspondente
+# Remover linhas onde não temos target
+available_idx = df_38_features.index
+df_target = df.loc[available_idx, 'Target'].astype(int)
 
-# # segurança: remove linhas quebradas
-# df_ml = df.dropna(subset=FEATURES + ["Target"]).copy()
+# Definir tamanho do teste
+n_test = st.number_input("Número de Dias para Previsão (Teste)", 
+                         min_value=1, max_value=60, value=30)
 
-# define X / y
-X = df_38_features.copy()
-y = df["Target"].astype(int).copy()
-
-n_test = st.number_input("Número de Dias para Previsão", min_value=1, max_value=60, value=30)
-# separa últimos 30 dias para TESTE
-# n_test = 30
-X_train, X_test = X.iloc[:-n_test], X.iloc[-n_test:]
-y_train, y_test = y.iloc[:-n_test], y.iloc[-n_test:]
-
-st.write("Período final após novas features:", df.index.min().date(), "->", df.index.max().date(), "| linhas:", len(df))
-
-st.write("Treino:", X_train.index.min().date(), "->", X_train.index.max().date())
-st.write("Teste :", X_test.index.min().date(),  "->", X_test.index.max().date())
-st.write("Shapes:", X_train.shape, X_test.shape)
-
-# Carregar o arquivo pickle
-with open('svm_clf.pkl', 'rb') as arquivo:
-    modelo_svm_clf = pickle.load(arquivo)
-
-# X_test_svm = align_to_fit(svm_clf, X_test) # garantir a mesma ordem da colunas
-
-# Prever
-y_pred_svm = modelo_svm_clf.predict(X_test)
-
-#################################################################
-st.subheader("Previsões do Modelo SVM para o Período de Teste")
-import streamlit as st
-import pandas as pd
-import numpy as np
-from sklearn import metrics
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-# Título
-st.title("📈 Avaliação do Modelo SVM")
-
-# Matriz de Confusão
-st.header("Matriz de Confusão")
-
-# Criar figura
-fig, ax = plt.subplots(figsize=(7, 5))
-
-# Calcular matriz (substitua com seus dados reais)
-mlp_cm = metrics.confusion_matrix(y_pred_svm, y_test)
-
-
-col1, col2 = st.columns(2)
-
-with col1:
-        # Plotar
-    sns.heatmap(mlp_cm, 
-                annot=True, 
-                fmt='.0f', 
+# Separar treino e teste
+if len(df_38_features) > n_test:
+    X_train = df_38_features.iloc[:-n_test]
+    X_test = df_38_features.iloc[-n_test:]
+    y_train = df_target.iloc[:-n_test]
+    y_test = df_target.iloc[-n_test:]
+    
+    # Carregar modelo SVM
+    with open('svm_clf.pkl', 'rb') as arquivo:
+        modelo_svm_clf = pickle.load(arquivo)
+    
+    # Ajustar o scaler com dados de treino
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Fazer previsões
+    y_pred_svm = modelo_svm_clf.predict(X_test_scaled)
+    
+    # Métricas de desempenho
+    st.subheader("Métricas de Desempenho")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        accuracy = metrics.accuracy_score(y_test, y_pred_svm)
+        st.metric("Acurácia", f"{accuracy:.2%}")
+    
+    with col2:
+        precision = metrics.precision_score(y_test, y_pred_svm, average='binary', zero_division=0)
+        st.metric("Precisão", f"{precision:.2%}")
+    
+    with col3:
+        recall = metrics.recall_score(y_test, y_pred_svm, average='binary', zero_division=0)
+        st.metric("Recall", f"{recall:.2%}")
+    
+    with col4:
+        f1 = metrics.f1_score(y_test, y_pred_svm, average='binary', zero_division=0)
+        st.metric("F1-Score", f"{f1:.2%}")
+    
+    # Matriz de Confusão
+    st.subheader("Matriz de Confusão")
+    
+    fig, ax = plt.subplots(figsize=(6, 4))
+    cm = metrics.confusion_matrix(y_test, y_pred_svm)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
                 xticklabels=["Caiu", "Subiu"], 
                 yticklabels=["Caiu", "Subiu"],
-                cmap='Blues',
                 ax=ax)
-
-    ax.set_ylabel('Predição do Modelo')
-    ax.set_xlabel('Classificação Real')
-    ax.set_title('Modelo SVM')
-
+    ax.set_xlabel('Predição')
+    ax.set_ylabel('Real')
+    ax.set_title('Matriz de Confusão - SVM')
     st.pyplot(fig)
-
-with col2:
-    # Relatório de classificação
-    st.header("Relatório de Classificação")
-
+    
+    # Relatório de Classificação
+    st.subheader("Relatório de Classificação")
     report = metrics.classification_report(y_test, y_pred_svm, 
-                                        target_names=["Caiu", "Subiu"])
+                                          target_names=["Caiu", "Subiu"],
+                                          output_dict=False)
     st.text(report)
-
-
-
-# Métricas
-st.header("Métricas de Desempenho")
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    accuracy = metrics.accuracy_score(y_test, y_pred_svm)
-    st.metric("Acurácia", f"{accuracy:.2%}")
-
-with col2:
-    precision = metrics.precision_score(y_test, y_pred_svm, average='binary')
-    st.metric("Precisão", f"{precision:.2%}")
-
-with col3:
-    recall = metrics.recall_score(y_test, y_pred_svm, average='binary')
-    st.metric("Recall", f"{recall:.2%}")
-
-with col4:
-    f1 = metrics.f1_score(y_test, y_pred_svm, average='binary')
-    st.metric("F1-Score", f"{f1:.2%}")
-
-
-#################################################################
-# # Criar inputs para os dados
-# st.header("Insira os dados para previsão")
-
-# # teste de input - substituir pelos valores inseridos pelo usuário
-# teste_input=[[-0.0796797263681647,-1.9969716881410136,-0.5643672174612924,
-#       1.4369554985640187,104.093,102.18675,96.97518,86.91625,
-#       1.2265044439895267,10900000,103.14725011259122,101.33530451543,
-#       1.8119455971612268,1.952086539617413,57.75068102212942,
-#       48.16017316016453,67.04462503854658,1.8918571428571431,
-#       -2.075060232932413,-2.6277164906964634,-1.5764235190520504,
-#       -1.5283550073736496,3.9348272132771367,0.2785754881872977,
-#       0.976829878934459,0.6294847423956806,6.037441745403305,
-#       18.30929199085325,0.1908481147069096,0.427849287359705,
-#       0.1222899319652581,1,1,1,1,0,0,1]]
-
-# Input_previsao = [[input_Retorno,input_Lag1,input_Lag2,input_Lag3,input_MM5,input_MM20,input_MM50,input_MM100,input_Volatilidade5,input_Volume,
-#                    input_EMA12,input_EMA26,input_MACD,input_MACDsig,input_RSI14,input_STOCHK,input_STOCHD,input_ATR14,input_Ret_2d,input_Ret_3d,
-#                    input_Ret_5d,input_Ret_10d,input_Ret_20d,input_ZClose_20,input_ZVolume_20,input_Dist_MM20_pct,input_Dist_MM50_pct,input_Dist_MM100_pct,input_Slope_MM20, input_Slope_MM50,
-#                    input_Slope_MM100,input_Cross_5_20,input_Cross_20_50,input_Cross_50_100,input_Cross_EMA12_26,input_Cross_STOCH,input_DOW_sin,input_DOW_cos
-#                    ]]
-
-# st.write("Input_previsao:")
-# st.write(Input_previsao)
-
-# Depois calcular os 38 valores.
-# feature1 = st.number_input("Feature 1", value=0.0)
-# feature2 = st.number_input("Feature 2", value=0.0)
-# feature3 = st.number_input("Feature 3", value=0.0)
-# ...
-# input_data = [[feature1, feature2, feature3]]
-
-# # Botão para fazer previsão
-# if st.button("Prever"):
-#     # Criar array com os dados de entrada
-#     dados_entrada = np.array([[feature1, feature2, feature3]])
     
-#     # Fazer previsão
-#     previsao = modelo.predict(dados_entrada)
+    # Previsões vs Real
+    st.subheader("Previsões vs Real (Últimos 20 dias)")
+    results_df = pd.DataFrame({
+        'Data': X_test.index[-20:],
+        'Real': y_test[-20:].values,
+        'Previsto': y_pred_svm[-20:]
+    })
+    results_df['Real'] = results_df['Real'].map({0: 'Caiu', 1: 'Subiu'})
+    results_df['Previsto'] = results_df['Previsto'].map({0: 'Caiu', 1: 'Subiu'})
+    results_df['Acerto'] = results_df['Real'] == results_df['Previsto']
     
-#     # Mostrar resultado
-#     st.success(f"Previsão: {previsao[0]}")
+    st.dataframe(results_df)
+    
+    # Estatísticas de acerto
+    acertos = results_df['Acerto'].sum()
+    total = len(results_df)
+    st.metric("Taxa de Acerto (últimos 20 dias)", f"{acertos/total:.2%}")
+    
+else:
+    st.warning("Dataset muito pequeno para separação treino-teste. Adicione mais dados.")
 
-#y_pred = modelo_svm_clf.predict(teste_input)
-#y_pred = modelo_svm_clf.predict(Input_previsao)
+# Previsão para o próximo dia
+st.divider()
+st.subheader("🔮 Previsão para o Próximo Dia Útil")
 
-# # st.write(f"### Previsão SVM de Fechamento para o próximo dia:")
-# # if y_pred == 0:
-# #     st.write("Fechamento Negativo")
-# # else:
-# #     st.write("Fechamento Positivo") 
-
-# # st.write(y_pred)
-
-#################################################################
-# y_pred_svm = svm_clf_loaded.predict(X_test)
-
-# #st.write(f"### Previsão de Fechamento para {input_data + timedelta(days=input_dias)}:")
-
-# if y_pred_svm[-1] == 0:
-#     st.write("Fechamento Negativo") 
-# else:
-#     st.write("Fechamento Positivo") 
-
-
-
-# # parametros do modelo
-# import pickle
-
-# # Salva o modelo
-# with open('param_name_model.pkl', 'wb') as f:
-#     pickle.dump(name_model, f)
-
-# # Carrega o modelo
-# with open('param_name_model.pkl', 'rb') as f:
-#     name_model_loaded = pickle.load(f)
-
-# # 
-# new_data = [[,,,]] # substitua pelos novos dados para previsão
-# prediction = name_model_loaded.predict(new_data)
-
-# if prediction == 0:
-#     resultado = "Fechamento negativo"
-# else:
-#     resultado = "Fechamento positivo"
-
-# print(resultado)
+if len(df) > 0:
+    # Supondo que queremos prever o dia seguinte à última data disponível
+    last_date = df.index[-1]
+    next_date = last_date + pd.Timedelta(days=1)
+    
+    # Para prever o próximo dia, precisaríamos dos dados do dia atual
+    # Como exemplo, vamos usar os últimos dados disponíveis
+    last_row = df.iloc[[-1]]
+    
+    # Criar um DataFrame simulado para o próximo dia (usando último dado disponível)
+    next_day_data = last_row.copy()
+    next_day_data.index = [next_date]
+    
+    # Fazer previsão
+    try:
+        next_prediction = predictor.predict_for_date(df, last_date)
+        if next_prediction:
+            st.write(f"**Última data disponível:** {last_date.date()}")
+            if next_prediction['prediction'] == 0:
+                st.error(f"📉 **Previsão para próximo dia: Fechamento Negativo**")
+            else:
+                st.success(f"📈 **Previsão para próximo dia: Fechamento Positivo**")
+            
+            if next_prediction['probabilities'] is not None:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Prob. de Subir", f"{next_prediction['probabilities'][1]:.2%}")
+                with col2:
+                    st.metric("Prob. de Cair", f"{next_prediction['probabilities'][0]:.2%}")
+    except Exception as e:
+        st.warning(f"Não foi possível fazer previsão para próximo dia: {str(e)}")
