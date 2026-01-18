@@ -69,19 +69,21 @@ def load_model_and_features():
 
 
 @st.cache_data(ttl=3600)
-def load_dataset(local_first: bool, data_url: str) -> pd.DataFrame:
-    """Carrega dataset tratado: tenta local (raiz ou data/), senão usa URL raw."""
+def load_dataset(local_first: bool, data_url: str) -> tuple[pd.DataFrame, str]:
+    """
+    Retorna:
+      df, dataset_source  -> 'local_root' | 'local_data' | 'url'
+    """
+    root = Path(__file__).parent / "dados_tratados_data_correta.csv"
+    data_dir = Path(__file__).parent / "data" / "dados_tratados_data_correta.csv"
+
     if local_first:
-        root = Path(__file__).parent / "dados_tratados_data_correta.csv"
-        data_dir = Path(__file__).parent / "data" / "dados_tratados_data_correta.csv"
-
         if root.exists():
-            return pd.read_csv(root)
+            return pd.read_csv(root), "local_root"
         if data_dir.exists():
-            return pd.read_csv(data_dir)
+            return pd.read_csv(data_dir), "local_data"
 
-    return pd.read_csv(data_url)
-
+    return pd.read_csv(data_url), "url"
 
 @st.cache_data(ttl=3600)
 def fetch_market_history(ticker_symbol: str, years: int) -> pd.DataFrame:
@@ -143,6 +145,26 @@ def fmt_brl(x: float) -> str:
     s = s.replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {s}"
 
+def fmt_index_pts(x: float) -> str:
+    """
+    Formata número como pontos de índice no padrão BR:
+    163154.12 -> "163.154"
+    (arredonda para inteiro)
+    """
+    n = int(round(x))
+    s = f"{n:,}".replace(",", ".")
+    return s
+
+
+def fmt_price_by_ticker(ticker_symbol: str, x: float) -> str:
+    """
+    Se for Ibovespa (^BVSP) -> pontos (sem R$)
+    Senão -> moeda BRL (R$)
+    """
+    if ticker_symbol == "^BVSP":
+        return fmt_index_pts(x)
+    return fmt_brl(x)
+
 
 # =========================
 # Sidebar (controles)
@@ -159,7 +181,7 @@ root_path = Path(__file__).parent / "dados_tratados_data_correta.csv"
 data_path = Path(__file__).parent / "data" / "dados_tratados_data_correta.csv"
 
 local_data_first = st.sidebar.checkbox(
-    "Usar dataset local (raiz ou data/)",
+    "Usar dataset local (arquivo do projeto)",
     value=True
 )
 
@@ -168,21 +190,21 @@ data_url = st.sidebar.text_input("Fallback URL (raw) do dataset tratado", DEFAUL
 enable_logging = st.sidebar.checkbox("Salvar log de uso (CSV)", value=True)
 show_monitoring = st.sidebar.checkbox("Mostrar painel de monitoramento", value=True)
 
-show_last_features = st.checkbox("Mostrar últimas features", value=True)
-show_yahoo_indicators = st.checkbox("Mostrar indicadores do último dia (Yahoo)", value=True)
-
 # Botão de recarregar (limpa cache)
 if st.sidebar.button("🔄 Recarregar dados (limpar cache)"):
     st.cache_data.clear()
     st.cache_resource.clear()
     st.rerun()
 
-# Debug (opcional, mas ajuda muito)
-st.sidebar.caption(f"Local (raiz) existe? {root_path.exists()}")
-st.sidebar.caption(f"Local (data/) existe? {data_path.exists()}")
+
+# Debug: o que o usuário marcou + se há arquivo local disponível
+local_available = root_path.exists() or data_path.exists()
 st.sidebar.markdown(
-    f"**Fonte selecionada:** {'LOCAL' if (local_data_first and (root_path.exists() or data_path.exists())) else 'URL'}"
+    f"**Preferência marcada:** {'LOCAL' if local_data_first else 'URL'}"
+    f"<br>**Local disponível:** {'SIM' if local_available else 'NÃO'}",
+    unsafe_allow_html=True
 )
+
 
 # =========================
 # Carregar modelo
@@ -211,9 +233,9 @@ else:
     st.caption(f"Última data disponível no Yahoo (histórico): **{last_dt.date()}**")
 
     colA, colB, colC = st.columns(3)
-    colA.metric("Último Close (Yahoo)", fmt_brl(float(hist["Close"].iloc[-1])))
-    colB.metric("Máximo (período)", fmt_brl(float(hist["Close"].max())))
-    colC.metric("Mínimo (período)", fmt_brl(float(hist["Close"].min())))
+    colA.metric("Último Close (Yahoo)", fmt_price_by_ticker(ticker_symbol, float(hist["Close"].iloc[-1])))
+    colB.metric("Máximo (período)", fmt_price_by_ticker(ticker_symbol, float(hist["Close"].max())))
+    colC.metric("Mínimo (período)", fmt_price_by_ticker(ticker_symbol, float(hist["Close"].min())))
 
     price_df = hist.reset_index()[["Date", "Close"]].dropna()
     chart = (
@@ -249,25 +271,28 @@ st.warning(
     "A previsão/métricas vêm do **dataset tratado do notebook** para reproduzir seu experimento."
 )
 
-with st.expander("📄 Ver preview do dataset tratado"):
-    try:
-        df_raw_preview = load_dataset(local_data_first, data_url)
-        st.dataframe(df_raw_preview.tail(20), use_container_width=True)
-    except Exception as e:
-        st.error("Falha ao carregar preview do dataset tratado.")
-        st.exception(e)
-
-st.subheader("🧠 Previsão (últimos N registros do dataset tratado)")
-
-# carregar dataset tratado (de verdade)
+# carregar dataset tratado (uma vez só)
 try:
-    used_local = local_data_first and (root_path.exists() or data_path.exists())
-    df_raw = load_dataset(local_data_first, data_url)
+    df_raw, dataset_source = load_dataset(local_data_first, data_url)
     df = ensure_datetime_index(df_raw)
+
+    used_local = dataset_source.startswith("local")
+
+    # ✅ debug na sidebar (a fonte REAL)
+    st.sidebar.caption(f"Fonte carregada (REAL): {dataset_source.upper()}")
+
 except Exception as e:
     st.error("Falha ao carregar o dataset tratado.")
     st.exception(e)
     st.stop()
+
+# preview (reaproveita o que já foi carregado)
+with st.expander("📄 Ver preview do dataset tratado"):
+    st.caption(f"Fonte: **{dataset_source.upper()}**")
+    st.dataframe(df_raw.tail(15), use_container_width=True)
+
+st.subheader("🧠 Previsão (últimos N registros do dataset tratado)")
+
 
 # validações
 if "Target" not in df_raw.columns and "Target" not in df.columns:
@@ -368,7 +393,11 @@ if btn:
 
     # Último fechamento: do Yahoo do ticker (informativo)
     if yahoo_last_close is not None:
-        m2.metric(f"Último fechamento do ticker no Yahoo ({ticker_symbol})", fmt_brl(yahoo_last_close))
+        m2.metric(
+            f"Último fechamento do ticker no Yahoo ({ticker_symbol})",
+            fmt_price_by_ticker(ticker_symbol, yahoo_last_close)
+        )
+
     else:
         m2.metric(f"Último fechamento do ticker no Yahoo ({ticker_symbol})", "—")
 
@@ -386,6 +415,7 @@ if btn:
         st.caption(conf_txt)
 
     # ---- Últimas features (dataset tratado) ----
+    show_last_features = st.checkbox("Mostrar últimas features", value=True)
     X_last = X_test.tail(1).copy()
     if show_last_features:
         st.markdown("### Últimas features usadas (linha final do dataset tratado)")
@@ -394,14 +424,15 @@ if btn:
         st.dataframe(show_df, use_container_width=True)
 
     # ---- Indicadores Yahoo (informativo) ----
+    show_yahoo_indicators = st.checkbox("Mostrar indicadores do último dia (Yahoo)", value=True)
     if show_yahoo_indicators:
         st.markdown(f"### Indicadores do último dia (Yahoo) — {ticker_symbol} (informativo)")
         if yahoo_last_close is None or yahoo_prev_close is None:
             st.info("Yahoo não retornou dados suficientes para calcular indicadores do dia.")
         else:
             i1, i2, i3 = st.columns(3)
-            i1.metric("Close (último)", fmt_brl(yahoo_last_close))
-            i2.metric("Close (anterior)", fmt_brl(yahoo_prev_close))
+            i1.metric("Close (último)", fmt_price_by_ticker(ticker_symbol, yahoo_last_close))
+            i2.metric("Close (anterior)", fmt_price_by_ticker(ticker_symbol, yahoo_prev_close))
             i3.metric("Variação %", f"{yahoo_pct:+.2f}%")
 
     # ---- Log de uso ----
@@ -458,7 +489,6 @@ if btn:
 # =========================
 if show_monitoring:
     st.subheader("📌 Monitoramento do Modelo (métricas e performance)")
-
     if "y_test" not in st.session_state or "y_pred" not in st.session_state:
         st.info("Clique em **Gerar previsão** para calcular as métricas nesta janela.")
     else:
@@ -476,49 +506,113 @@ if show_monitoring:
         c3.metric("Recall", f"{rec:.3f}")
         c4.metric("F1-score", f"{f1:.3f}")
 
+        # ---------- Matriz de confusão ----------
         cm = confusion_matrix(y_test, y_pred)
         cm_df = pd.DataFrame(cm, index=["Real 0", "Real 1"], columns=["Pred 0", "Pred 1"])
 
-        # prepara dados pro heatmap (Altair)
-        cm_plot = cm_df.reset_index().melt(id_vars="index", var_name="Pred", value_name="Count")
-        cm_plot = cm_plot.rename(columns={"index": "Real"})
+        cm_plot = (
+            cm_df.reset_index()
+            .melt(id_vars="index", var_name="Pred", value_name="Count")
+            .rename(columns={"index": "Real"})
+        )
 
+        # Heatmap com cor por contagem
         heatmap = (
             alt.Chart(cm_plot)
             .mark_rect()
             .encode(
-                x=alt.X("Pred:N", title="Previsto"),
-                y=alt.Y("Real:N", title="Real"),
+                x=alt.X(
+                    "Pred:N",
+                    title="Previsto",
+                    axis=alt.Axis(labelAngle=0),  # <-- garante horizontal
+                    sort=["Pred 0", "Pred 1"],
+                ),
+                y=alt.Y(
+                    "Real:N",
+                    title="Real",
+                    sort=["Real 0", "Real 1"],
+                ),
+                color=alt.Color("Count:Q", title="Qtde"),
                 tooltip=["Real:N", "Pred:N", "Count:Q"],
             )
+            .properties(height=220)
         )
 
         labels = (
             alt.Chart(cm_plot)
-            .mark_text()
+            .mark_text(fontSize=16)
             .encode(
-                x="Pred:N",
-                y="Real:N",
+                x=alt.X("Pred:N", sort=["Pred 0", "Pred 1"]),
+                y=alt.Y("Real:N", sort=["Real 0", "Real 1"]),
                 text=alt.Text("Count:Q"),
+                color=alt.value("black"),
             )
+            .properties(height=220)
         )
 
         st.write("**Matriz de confusão:**")
-
-        col_left, col_right = st.columns([1, 1.2])  # ajusta o peso se quiser
+        col_left, col_right = st.columns([1, 1.2])
         with col_left:
             st.dataframe(cm_df, use_container_width=True)
-
         with col_right:
             st.altair_chart(heatmap + labels, use_container_width=True)
 
-
-
+        # ---------- Diagnóstico (tabela + pizza) ----------
         with st.expander("Diagnóstico (distribuição Real/Previsto)"):
-            st.write("Distribuição REAL (Target):")
-            st.write(pd.Series(y_test).value_counts().sort_index())
-            st.write("Distribuição PREVISTA:")
-            st.write(pd.Series(y_pred).value_counts().sort_index())
+            real_counts = pd.Series(y_test).value_counts().sort_index()
+            pred_counts = pd.Series(y_pred).value_counts().sort_index()
+
+            # padroniza pra sempre aparecer 0 e 1
+            real_counts = real_counts.reindex([0, 1], fill_value=0)
+            pred_counts = pred_counts.reindex([0, 1], fill_value=0)
+
+            diag_df = pd.DataFrame(
+                {
+                    "Classe": ["0 (queda)", "1 (alta)"],
+                    "Real": [int(real_counts.loc[0]), int(real_counts.loc[1])],
+                    "Previsto": [int(pred_counts.loc[0]), int(pred_counts.loc[1])],
+                }
+            )
+
+            tcol, pcol = st.columns([1, 1.2])
+
+            with tcol:
+                st.write("**Tabela do diagnóstico**")
+                st.dataframe(diag_df, use_container_width=True)
+
+            with pcol:
+                # Pizza: Real vs Previsto (lado a lado)
+                pie_real = pd.DataFrame(
+                    {"Classe": ["0 (queda)", "1 (alta)"], "Count": [int(real_counts.loc[0]), int(real_counts.loc[1])]}
+                )
+                pie_pred = pd.DataFrame(
+                    {"Classe": ["0 (queda)", "1 (alta)"], "Count": [int(pred_counts.loc[0]), int(pred_counts.loc[1])]}
+                )
+
+                chart_real = (
+                    alt.Chart(pie_real)
+                    .mark_arc()
+                    .encode(
+                        theta=alt.Theta("Count:Q"),
+                        color=alt.Color("Classe:N", title=None),
+                        tooltip=["Classe:N", "Count:Q"],
+                    )
+                    .properties(title="Distribuição REAL", height=220)
+                )
+
+                chart_pred = (
+                    alt.Chart(pie_pred)
+                    .mark_arc()
+                    .encode(
+                        theta=alt.Theta("Count:Q"),
+                        color=alt.Color("Classe:N", title=None),
+                        tooltip=["Classe:N", "Count:Q"],
+                    )
+                    .properties(title="Distribuição PREVISTA", height=220)
+                )
+
+                st.altair_chart(chart_real | chart_pred, use_container_width=True)
+
 
 
 # =========================

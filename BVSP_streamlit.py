@@ -120,7 +120,7 @@ try:
     #     st.error(f"A data {input_date.date()} não foi encontrada no dataset.")
     #     st.stop()
         
-    input_date = '2020-07-29'
+    #input_date = '2020-07-29'
     # Obter valores para a data específica
     input_fechamento = df.loc[df.index.normalize() == input_date, 'Fechamento'].iloc[0]
     input_abertura = df.loc[df.index.normalize() == input_date, 'Abertura'].iloc[0]
@@ -133,19 +133,19 @@ try:
     
     with colins1:
         st.info("Valor de Fechamento:")
-        st.success(f"Fechamento: {input_fechamento:,.2f}")
+        st.success(f"Fechamento: {input_fechamento:,.0f}")
     
     with colins2:
         st.info("Valor de Abertura:")
-        st.success(f"Abertura: {input_abertura:,.2f}")
+        st.success(f"Abertura: {input_abertura:,.0f}")
     
     with colins3:
         st.info("Valor de Máxima:")
-        st.success(f"Máxima: {input_maxima:,.2f}")
+        st.success(f"Máxima: {input_maxima:,.0f}")
     
     with colins4:
         st.info("Valor de Mínima:")
-        st.success(f"Mínima: {input_minima:,.2f}")
+        st.success(f"Mínima: {input_minima:,.0f}")
     
     with colins5:
         st.info("Valor de Volume:")
